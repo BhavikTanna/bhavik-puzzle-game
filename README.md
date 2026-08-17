@@ -25,7 +25,7 @@ both it and the web app.
 
 | Script                 | What it does                                  |
 | ---------------------- | --------------------------------------------- |
-| `yarn dev`             | Dev server on http://localhost:5173           |
+| `yarn dev`             | Dev server on http://localhost:5174/brickwords/ |
 | `yarn build`           | Typecheck and build to `dist/`                |
 | `yarn test`            | Game-logic tests (vitest)                     |
 | `yarn lint`            | oxlint                                        |
@@ -123,7 +123,7 @@ built site as part of the same stack — so one command ships both.
 | File                            | What it holds                          |
 | ------------------------------- | -------------------------------------- |
 | `infra/bin/app.ts`              | Entry point, reads config from context |
-| `infra/lib/brickwords-stack.ts` | Bucket, distribution, upload, IAM      |
+| `infra/lib/brickwords-stack.ts` | Bucket, upload, cache headers, grants  |
 
 ### First time
 
@@ -134,6 +134,8 @@ yarn infra:bootstrap
 ```
 
 ### Deploy
+
+Deploys are manual — there is no CI pipeline in this repo.
 
 ```bash
 yarn deploy
@@ -151,17 +153,15 @@ yarn diff
 Every option is optional and can be passed as CDK context (`-c key=value`) or as
 an environment variable:
 
-| Context              | Env var                | Purpose                                     |
-| -------------------- | ---------------------- | ------------------------------------------- |
-| `stackName`          | `STACK_NAME`           | Stack name (default `Brickwords`)           |
-| `domainNames`        | `DOMAIN_NAMES`         | Comma-separated custom domains              |
-| `certificateArn`     | `CERTIFICATE_ARN`      | ACM cert ARN, **must be in us-east-1**      |
-| `githubRepo`         | `GITHUB_REPO`          | `owner/repo` to create a CI deploy role for |
-| `createOidcProvider` | `CREATE_OIDC_PROVIDER` | `true` if the account has no GitHub OIDC provider yet |
-
-```bash
-yarn deploy -c githubRepo=you/your-repo -c createOidcProvider=true
-```
+| Context                 | Env var                    | Purpose                                                     |
+| ----------------------- | -------------------------- | ----------------------------------------------------------- |
+| `stackName`             | `STACK_NAME`               | Stack name (default `Brickwords`)                           |
+| `basePath`              | `BASE_PATH_SEGMENT`        | URL path and S3 key prefix (default `brickwords`)           |
+| `bucketName`            | `SITE_BUCKET_NAME`         | Bucket name; the CV stack imports this literal              |
+| `servingDistributionId` | `SERVING_DISTRIBUTION_ID`  | Distribution to serve through (defaults to the CV's)        |
+| `standalone`            | —                          | `true` builds a dedicated distribution instead              |
+| `domainNames`           | `DOMAIN_NAMES`             | Custom domains, standalone only                             |
+| `certificateArn`        | `CERTIFICATE_ARN`          | ACM cert ARN, **must be in us-east-1**                      |
 
 Region and account come from your AWS profile, so `AWS_PROFILE` and
 `AWS_REGION` work as usual.
@@ -176,25 +176,6 @@ invalidated, because everything else is content-hashed.
 
 Old assets are pruned on each deploy, and the bucket is versioned, so a bad
 deploy is recoverable.
-
-### Continuous deployment (optional)
-
-`.github/workflows/deploy.yml` builds, tests, and deploys on every push to
-`main`, authenticating with OIDC so there are no long-lived AWS keys.
-
-Deploy once locally with `-c githubRepo=owner/repo` to create the role, then set
-these under **Settings → Environments → production**:
-
-| Variable              | Value                                             |
-| --------------------- | ------------------------------------------------- |
-| `AWS_DEPLOY_ROLE_ARN` | `DeployRoleArn` from the stack outputs            |
-| `AWS_REGION`          | e.g. `eu-west-1`                                  |
-| `STACK_NAME`          | Only if you changed it from `Brickwords`          |
-| `DOMAIN_NAMES`        | Only if using a custom domain                     |
-| `CERTIFICATE_ARN`     | Only if using a custom domain                     |
-
-The role can assume the CDK bootstrap roles rather than holding S3 and
-CloudFront permissions directly, which is what lets CI run `cdk deploy`.
 
 ### Serving at bhaviktanna.dev/brickwords
 

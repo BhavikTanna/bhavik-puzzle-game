@@ -40,13 +40,6 @@ export interface BrickwordsStackProps extends StackProps {
   domainNames?: string[]
   /** ACM certificate ARN. CloudFront only reads certificates from us-east-1. */
   certificateArn?: string
-  /** `owner/repo` allowed to deploy through GitHub OIDC. */
-  githubRepo?: string
-  /**
-   * Create the account's GitHub OIDC provider. An account can hold exactly
-   * one, so leave this false if something else already created it.
-   */
-  createOidcProvider?: boolean
 }
 
 /**
@@ -205,10 +198,6 @@ export class BrickwordsStack extends Stack {
     })
     html.node.addDependency(assets)
 
-    if (props.githubRepo) {
-      this.addGitHubDeployRole(props.githubRepo, props.createOidcProvider ?? false)
-    }
-
     new CfnOutput(this, 'BucketName', { value: bucket.bucketName })
     new CfnOutput(this, 'BucketRegionalDomainName', {
       value: bucket.bucketRegionalDomainName,
@@ -227,46 +216,5 @@ export class BrickwordsStack extends Stack {
         value: `https://${props.domainNames[0]}/${basePath}`,
       })
     }
-  }
-
-  /**
-   * A role GitHub Actions can assume with no long-lived keys. Because CI runs
-   * `cdk deploy`, the role's job is to assume the CDK bootstrap roles rather
-   * than to touch S3 and CloudFront directly.
-   */
-  private addGitHubDeployRole(githubRepo: string, createProvider: boolean): void {
-    const providerUrl = 'https://token.actions.githubusercontent.com'
-
-    const provider = createProvider
-      ? new iam.OpenIdConnectProvider(this, 'GitHubOidcProvider', {
-          url: providerUrl,
-          clientIds: ['sts.amazonaws.com'],
-        })
-      : iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
-          this,
-          'GitHubOidcProvider',
-          `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
-        )
-
-    const role = new iam.Role(this, 'DeployRole', {
-      roleName: `${this.stackName}-deploy`,
-      description: `Deploys ${this.stackName} from GitHub Actions`,
-      maxSessionDuration: Duration.hours(1),
-      assumedBy: new iam.OpenIdConnectPrincipal(provider, {
-        StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        // Scope to one repo. Tighten to `repo:owner/name:ref:refs/heads/main`
-        // if deploys should only ever come from main.
-        StringLike: { 'token.actions.githubusercontent.com:sub': `repo:${githubRepo}:*` },
-      }),
-    })
-
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['sts:AssumeRole'],
-        resources: [`arn:aws:iam::${this.account}:role/cdk-*`],
-      }),
-    )
-
-    new CfnOutput(this, 'DeployRoleArn', { value: role.roleArn })
   }
 }

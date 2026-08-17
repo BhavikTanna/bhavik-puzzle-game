@@ -51,8 +51,6 @@ new BrickwordsStack(app, context('stackName', 'STACK_NAME') ?? 'Brickwords', {
         SERVING_DISTRIBUTION_ID),
   domainNames,
   certificateArn: context('certificateArn', 'CERTIFICATE_ARN'),
-  githubRepo: context('githubRepo', 'GITHUB_REPO'),
-  createOidcProvider: context('createOidcProvider', 'CREATE_OIDC_PROVIDER') === 'true',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
